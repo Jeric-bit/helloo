@@ -536,6 +536,18 @@ body.onletter #letter { display: block; }
 @keyframes bloom { from { transform: scale(0) rotate(-70deg); } }
 @keyframes sway { from { transform: rotate(-1.8deg); } to { transform: rotate(1.8deg); } }
 
+/* Offscreen 1px YouTube Container (Prevents Browser Audio Throttling) */
+#ytplayer {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0.01;
+  pointer-events: none;
+  z-index: -1;
+}
+
 /* Focus Ring Accessibility */
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
@@ -639,10 +651,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   <button class="go" id="introBtn">open</button>
 </div>
 
-<!-- Hidden YouTube Audio Player -->
-<div id="ytplayer" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;"></div>
+<!-- YouTube Player Container -->
+<div id="ytplayer"></div>
 
-<script src="https://www.youtube.com/iframe_api"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 /* ============ EDIT DATA HERE ============ */
@@ -786,13 +797,14 @@ const FLOWERS = [[4,22,84,.3],[17,31,96,0],[33,24,78,.5],[52,34,104,.15],[68,25,
 $('field').innerHTML = FLOWERS.map(([x,h,s,d]) => '<div class="fl" style="--x:'+x+'%;--h:'+h+'vh;--s:'+s+'px;--d:'+d+'s"><i class="stem"></i><div class="head">'+sunflower()+'</div></div>').join('');
 $('seal').innerHTML = sunflower();
 
-// YouTube Audio Player Setup
+// YouTube Audio Setup
 let ytPlayer = null;
+let ytReady = false;
 
-function onYouTubeIframeAPIReady() {
+window.onYouTubeIframeAPIReady = function() {
   ytPlayer = new YT.Player('ytplayer', {
-    height: '0',
-    width: '0',
+    height: '1',
+    width: '1',
     videoId: SONG.id,
     playerVars: {
       autoplay: 0,
@@ -802,18 +814,26 @@ function onYouTubeIframeAPIReady() {
       playsinline: 1
     },
     events: {
+      onReady: () => {
+        ytReady = true;
+      },
       onStateChange: (e) => {
         const isPlaying = e.data === YT.PlayerState.PLAYING;
         $('chip').classList.toggle('playing', isPlaying);
       }
     }
   });
-}
+};
+
+// Dynamically load YouTube API script to ensure callback binds reliably
+const tag = document.createElement('script');
+tag.src = "https://www.youtube.com/iframe_api";
+document.body.appendChild(tag);
 
 $('song').textContent = SONG.title + ' · ' + SONG.artist;
 
 $('chip').onclick = () => {
-  if (!ytPlayer || typeof ytPlayer.getPlayerState !== 'function') return;
+  if (!ytPlayer || !ytReady) return;
   if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
     ytPlayer.pauseVideo();
   } else {
@@ -822,7 +842,7 @@ $('chip').onclick = () => {
 };
 
 $('introBtn').onclick = () => {
-  if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
+  if (ytPlayer && ytReady) {
     ytPlayer.playVideo();
   }
   $('intro').classList.add('hide');
